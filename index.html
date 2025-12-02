@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<title>Aplikasi Penggunaan Laboratorium Sekolah</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+*{box-sizing:border-box;font-family:Arial,sans-serif;}
+body{margin:0;padding:0;background:#f3f5fb;color:#222;}
+header{
+  background:linear-gradient(120deg,#1976d2,#42a5f5);
+  color:#fff;padding:20px 10px 36px;text-align:center;position:relative;
+}
+.header-inner{max-width:1100px;margin:0 auto;position:relative;}
+.header-title-container{
+  display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;
+}
+#headerIcon{font-size:1.9rem;}
+#headerLogoImg{
+  width:42px;height:42px;border-radius:50%;display:none;object-fit:cover;
+  border:2px solid rgba(255,255,255,0.9);
+}
+#headerTitleText{margin:0;font-size:1.32rem;}
+#headerSubtitleText{margin-top:3px;font-size:.87rem;opacity:.95;max-width:600px;margin:auto;}
+.header-menu-btn{
+  position:absolute;right:8px;top:8px;border:none;background:rgba(255,255,255,0.3);
+  width:32px;height:32px;border-radius:50%;color:#fff;cursor:pointer;font-size:1.1rem;
+}
+.watermark-main{text-align:center;font-size:.75rem;margin-top:6px;opacity:.85;}
+
+/* MODAL */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;align-items:center;
+  justify-content:center;z-index:999;padding:8px;
+}
+.modal-box{
+  width:95%;max-width:1100px;background:#fff;border-radius:12px;padding:12px;
+  max-height:95vh;overflow-y:auto;
+}
+.modal-header{display:flex;justify-content:space-between;align-items:center;font-weight:600;}
+.modal-close-btn{background:none;border:none;font-size:1.2rem;cursor:pointer;}
+.section-title{margin-top:10px;font-weight:bold;font-size:.9rem;}
+
+main{padding:0 10px 30px;}
+.container{max-width:1100px;margin:auto;}
+
+.card{
+  background:#fff;border-radius:12px;padding:14px 16px;
+  box-shadow:0 2px 5px rgba(0,0,0,0.08);margin-top:14px;
+}
+.card-title{font-weight:bold;gap:8px;display:flex;align-items:center;margin-bottom:10px;}
+.card-title .emoji{font-size:1.3rem;}
+
+.lab-selector{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
+.lab-card{
+  border-radius:12px;padding:12px;cursor:pointer;border:2px solid transparent;
+  background:#fafbff;display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;
+}
+.lab-card.active{border-color:#1976d2;background:#e3f2fd;}
+.icon-circle{width:45px;height:45px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;font-size:1.5rem;}
+.badge-lab{background:#e3f2fd;padding:4px 8px;border-radius:20px;font-size:.8rem;color:#0d47a1;}
+
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;}
+
+input,textarea,select{
+  width:100%;padding:7px;border:1px solid #cfd6e4;border-radius:6px;font-size:.86rem;
+}
+textarea{min-height:60px;resize:vertical;}
+
+.btn-row{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;}
+.btn-primary{background:#1976d2;color:#fff;border:none;border-radius:999px;padding:7px 16px;}
+.btn-outline{background:#fff;color:#1976d2;border-radius:999px;border:1px solid #1976d2;padding:7px 16px;}
+
+.filters-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;font-size:.82rem;}
+.filter-item{display:flex;flex-direction:column;gap:3px;}
+
+table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:10px;}
+th,td{border-bottom:1px solid #e1e5f0;padding:6px 8px;}
+.photo-thumb{max-width:60px;max-height:45px;border:1px solid #cfd6e4;border-radius:3px;}
+
+.no-data{text-align:center;font-size:.83rem;opacity:.7;padding:8px;}
+footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="header-inner">
+    <button id="headerMenuBtn" class="header-menu-btn">⋮</button>
+
+    <div class="header-title-container">
+      <span id="headerIcon">🏫</span>
+      <img id="headerLogoImg">
+      <h2 id="headerTitleText">Manajemen Penggunaan Laboratorium Sekolah</h2>
+    </div>
+
+    <p id="headerSubtitleText">
+      Monitoring kegiatan Lab IPA dan Lab Komputer dengan bukti foto dan laporan PDF.
+    </p>
+
+    <div class="watermark-main">
+      created &amp; developed by: <b>D.D Candra</b>
+    </div>
+  </div>
+</header>
+
+<!-- MODAL TITIK 3 -->
+<div id="menuModal" class="modal-backdrop">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span>Pengaturan Header &amp; Laporan</span>
+      <button id="closeMenuModal" class="modal-close-btn">✕</button>
+    </div>
+
+    <div class="section-title">Pengaturan Header</div>
+
+    <label>Emoji Icon Header</label>
+    <input type="text" id="inputHeaderIcon" maxlength="4">
+
+    <label>Logo Sekolah</label>
+    <input type="file" id="inputHeaderLogo" accept="image/*">
+
+    <label>Judul Header</label>
+    <input type="text" id="inputHeaderTitle">
+
+    <label>Sub Judul Header</label>
+    <input type="text" id="inputHeaderSubtitle">
+
+    <div class="btn-row">
+      <button id="btnSimpanHeader" class="btn-primary">Simpan Header</button>
+    </div>
+
+    <section class="card">
+      <div class="card-title">
+        <span class="emoji">📊</span>Data Penggunaan Lab
+      </div>
+
+      <div class="filters-row">
+        <div class="filter-item">
+          <label>Filter Lab</label>
+          <select id="filterLab">
+            <option value="all">Semua Lab</option>
+            <option value="ipa">Lab IPA</option>
+            <option value="komputer">Lab Komputer</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <label>Tanggal Mulai</label>
+          <input type="date" id="filterTanggalMulai">
+        </div>
+        <div class="filter-item">
+          <label>Tanggal Selesai</label>
+          <input type="date" id="filterTanggalSelesai">
+        </div>
+        <div class="filter-item">
+          <label>&nbsp;</label>
+          <button id="btnTerapkanFilter" class="btn-outline">Terapkan</button>
+        </div>
+      </div>
+
+      <div id="tableContainer">
+        <div class="no-data" id="noDataMessage">Belum ada data penggunaan lab.</div>
+        <table id="usageTable" style="display:none">
+          <thead>
+            <tr>
+              <th>No</th><th>Lab</th><th>Tanggal</th><th>Guru</th><th>Kelas</th>
+              <th>Kegiatan</th><th>Waktu</th><th>Catatan</th><th>Foto</th>
+            </tr>
+          </thead>
+          <tbody id="usageTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">
+        <span class="emoji">📄</span>Laporan PDF
+      </div>
+
+      <label>Title</label>
+      <input type="text" id="reportTitle" placeholder="Judul Laporan">
+
+      <label>Subtitle</label>
+      <input type="text" id="reportSubtitle" placeholder="Tahun Pelajaran">
+
+      <label>Lab Dicetak</label>
+      <select id="reportLab">
+        <option value="all">Semua Lab</option>
+        <option value="ipa">Lab IPA</option>
+        <option value="komputer">Lab Komputer</option>
+      </select>
+
+      <label>Periode Mulai</label>
+      <input type="date" id="reportTanggalMulai">
+
+      <label>Periode Selesai</label>
+      <input type="date" id="reportTanggalSelesai">
+
+      <div class="btn-row">
+        <button id="btnGeneratePDF" class="btn-primary">Generate PDF</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<main>
+  <div class="container">
+
+    <section class="card">
+      <div class="card-title">
+        <span class="emoji">🏷️</span>
+        Pilih Lab
+        <span id="currentLabBadge" class="badge-lab">Lab IPA (aktif)</span>
+      </div>
+      <div class="lab-selector">
+        <div class="lab-card ipa active" data-lab="ipa">
+          <div class="icon-circle">🧪</div>
+          <div><b>Lab IPA</b><br><small>Praktikum sains</small></div>
+        </div>
+        <div class="lab-card komputer" data-lab="komputer">
+          <div class="icon-circle">💻</div>
+          <div><b>Lab Komputer</b><br><small>CBT &amp; TIK</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">
+        <span class="emoji">📝</span>
+        Form Penggunaan
+        <span id="formLabActive" class="badge-lab">Lab IPA</span>
+      </div>
+
+      <form id="usageForm">
+        <div class="form-grid">
+          <div><label>Tanggal</label><input type="date" id="tanggal" required></div>
+          <div><label>Nama Pengguna</label><input type="text" id="namaPengguna" required></div>
+          <div><label>Kelas</label><input type="text" id="kelas"></div>
+          <div><label>Kegiatan</label><input type="text" id="kegiatan" required></div>
+          <div><label>Jam Mulai</label><input type="time" id="jamMulai"></div>
+          <div><label>Jam Selesai</label><input type="time" id="jamSelesai"></div>
+          <div><label>Foto</label><input type="file" id="fotoBukti" accept="image/*"></div>
+          <div><label>Catatan</label><textarea id="catatan"></textarea></div>
+        </div>
+
+        <div class="btn-row">
+          <button id="btnSimpan" type="button" class="btn-primary">Simpan</button>
+          <button type="reset" class="btn-outline">Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <footer>
+      Aplikasi pemantauan penggunaan Lab IPA &amp; Lab Komputer.
+    </footer>
+
+  </div>
+</main>
+
+<script>
+// ====== URL WEB APP SPREADSHEET BAPAK ======
+const API_URL = "https://script.google.com/macros/s/AKfycbzsgW-Wwx98PSTA9AE17mgHd7CjOat_Vicxvu1aCyBeBlseT6RUgZvB-TznCG08csw7/exec";
+
+let currentLab = "ipa";
+let currentPhotoDataUrl = null;
+let usageData = [];
+
+// helper get element
+const $ = id => document.getElementById(id);
+
+// ====== PILIH LAB ======
+document.querySelectorAll(".lab-card").forEach(card => {
+  card.addEventListener("click", () => {
+    document.querySelectorAll(".lab-card").forEach(c => c.classList.remove("active"));
+    card.classList.add("active");
+    currentLab = card.dataset.lab;
+
+    $("currentLabBadge").textContent =
+      currentLab === "ipa" ? "Lab IPA (aktif)" : "Lab Komputer (aktif)";
+    $("formLabActive").textContent =
+      currentLab === "ipa" ? "Lab IPA" : "Lab Komputer";
+  });
+});
+
+// ====== MODAL TITIK 3 ======
+const modal = $("menuModal");
+$("headerMenuBtn").onclick = () => {
+  $("inputHeaderIcon").value = $("headerIcon").textContent;
+  $("inputHeaderTitle").value = $("headerTitleText").textContent;
+  $("inputHeaderSubtitle").value = $("headerSubtitleText").textContent;
+  modal.style.display = "flex";
+};
+$("closeMenuModal").onclick = () => modal.style.display = "none";
+modal.addEventListener("click", e => { if (e.target === modal) modal.style.display = "none"; });
+
+// ====== PENGATURAN HEADER ======
+$("btnSimpanHeader").onclick = () => {
+  const icon = $("inputHeaderIcon").value || "🏫";
+  const title = $("inputHeaderTitle").value ||
+    "Manajemen Penggunaan Laboratorium Sekolah";
+  const subtitle = $("inputHeaderSubtitle").value ||
+    "Monitoring kegiatan Lab IPA dan Lab Komputer dengan bukti foto dan laporan PDF.";
+
+  $("headerIcon").textContent = icon;
+  $("headerTitleText").textContent = title;
+  $("headerSubtitleText").textContent = subtitle;
+  alert("Header diperbarui!");
+};
+
+$("inputHeaderLogo").onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = v => {
+    const img = $("headerLogoImg");
+    img.src = v.target.result;
+    img.style.display = "inline-block";
+    $("headerIcon").style.display = "none";
+  };
+  r.readAsDataURL(f);
+};
+
+// ====== FOTO BUKTI ======
+$("fotoBukti").onchange = e => {
+  const f = e.target.files[0];
+  if (!f) { currentPhotoDataUrl = null; return; }
+  const r = new FileReader();
+  r.onload = v => currentPhotoDataUrl = v.target.result;
+  r.readAsDataURL(f);
+};
+
+// ====== SIMPAN DATA KE SPREADSHEET ======
+$("btnSimpan").onclick = async () => {
+  const tanggal = $("tanggal").value;
+  const namaPengguna = $("namaPengguna").value.trim();
+  const kelas = $("kelas").value.trim();
+  const kegiatan = $("kegiatan").value.trim();
+  const jamMulai = $("jamMulai").value;
+  const jamSelesai = $("jamSelesai").value;
+  const catatan = $("catatan").value.trim();
+
+  if (!tanggal || !namaPengguna || !kegiatan) {
+    alert("Tanggal, Nama, dan Kegiatan wajib diisi.");
+    return;
+  }
+
+  const record = {
+    lab: currentLab,
+    tanggal,
+    namaPengguna,
+    kelas,
+    kegiatan,
+    jamMulai,
+    jamSelesai,
+    catatan,
+    fotoDataUrl: currentPhotoDataUrl
+  };
+
+  try {
+    const res = await fetch(API_URL + "?action=add", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(record)
+    });
+    const json = await res.json();
+    if (json.status === "success") {
+      alert("Data tersimpan ke Spreadsheet (ID: " + json.id + ")");
+      $("usageForm").reset();
+      currentPhotoDataUrl = null;
+      $("fotoBukti").value = "";
+      await loadDataFromServer();
+    } else {
+      alert("Gagal menyimpan: " + (json.message || "Unknown error"));
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Error koneksi ke server (Spreadsheet).");
+  }
+};
+
+// ====== LOAD DATA DARI SPREADSHEET ======
+async function loadDataFromServer() {
+  try {
+    const res = await fetch(API_URL + "?action=list");
+    const json = await res.json();
+    if (json.status === "success") {
+      usageData = json.data || [];
+      renderTable();
+    } else {
+      console.error(json);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// ====== RENDER TABEL & FILTER ======
+function renderTable() {
+  const filterLab = $("filterLab").value;
+  const tMulai = $("filterTanggalMulai").value;
+  const tSelesai = $("filterTanggalSelesai").value;
+
+  let data = [...usageData];
+  if (filterLab !== "all") data = data.filter(x => x.lab === filterLab);
+  if (tMulai) data = data.filter(x => x.tanggal >= tMulai);
+  if (tSelesai) data = data.filter(x => x.tanggal <= tSelesai);
+
+  const tb = $("usageTableBody");
+  const tbl = $("usageTable");
+  const msg = $("noDataMessage");
+  tb.innerHTML = "";
+
+  if (!data.length) {
+    tbl.style.display = "none";
+    msg.style.display = "block";
+    return;
+  }
+
+  msg.style.display = "none";
+  tbl.style.display = "table";
+
+  data.forEach((x, i) => {
+    const waktu = (x.jamMulai || "-") + " s.d. " + (x.jamSelesai || "-");
+    const fotoHTML = x.fotoDataUrl ?
+      `<img class="photo-thumb" src="${x.fotoDataUrl}">` : "-";
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td>${x.lab === "ipa" ? "Lab IPA" : "Lab Komputer"}</td>
+      <td>${x.tanggal}</td>
+      <td>${x.namaPengguna}</td>
+      <td>${x.kelas || "-"}</td>
+      <td>${x.kegiatan}</td>
+      <td>${waktu}</td>
+      <td>${x.catatan || "-"}</td>
+      <td>${fotoHTML}</td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+
+$("btnTerapkanFilter").onclick = renderTable;
+
+// ====== GENERATE PDF ======
+$("btnGeneratePDF").onclick = () => {
+  if (!usageData.length) {
+    alert("Belum ada data untuk dicetak.");
+    return;
+  }
+
+  const filterLab = $("reportLab").value;
+  const tMulai = $("reportTanggalMulai").value;
+  const tSelesai = $("reportTanggalSelesai").value;
+
+  let data = [...usageData];
+  if (filterLab !== "all") data = data.filter(x => x.lab === filterLab);
+  if (tMulai) data = data.filter(x => x.tanggal >= tMulai);
+  if (tSelesai) data = data.filter(x => x.tanggal <= tSelesai);
+
+  if (!data.length) {
+    alert("Tidak ada data sesuai filter laporan.");
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  const title = $("reportTitle").value || "Laporan Penggunaan Laboratorium";
+  const subtitle = $("reportSubtitle").value || "";
+
+  doc.setFontSize(14);
+  doc.text(title, 105, 12, { align: "center" });
+  doc.setFontSize(10);
+  doc.text(subtitle, 105, 18, { align: "center" });
+
+  let y = 26;
+  data.forEach((x, i) => {
+    if (y > 270) { doc.addPage(); y = 10; }
+
+    const labLabel = x.lab === "ipa" ? "Lab IPA" : "Lab Komputer";
+    const waktu = (x.jamMulai || "-") + " s.d. " + (x.jamSelesai || "-");
+
+    doc.setFontSize(10);
+    doc.text(`${i + 1}. ${labLabel}`, 10, y); y += 5;
+    doc.setFontSize(8);
+    doc.text(`Tanggal : ${x.tanggal}`, 12, y); y += 4;
+    doc.text(`Pengguna: ${x.namaPengguna}`, 12, y); y += 4;
+    doc.text(`Kelas   : ${x.kelas || "-"}`, 12, y); y += 4;
+    doc.text(`Kegiatan: ${x.kegiatan}`, 12, y); y += 4;
+    doc.text(`Waktu   : ${waktu}`, 12, y); y += 4;
+    doc.text(`Catatan : ${x.catatan || "-"}`, 12, y); y += 4;
+
+    if (x.fotoDataUrl) {
+      if (y > 240) { doc.addPage(); y = 10; }
+      try {
+        doc.text("Bukti Foto:", 12, y); y += 4;
+        doc.addImage(x.fotoDataUrl, "JPEG", 12, y, 40, 30);
+        y += 34;
+      } catch (e) {
+        doc.text("(Foto tidak dapat dimuat)", 12, y); y += 6;
+      }
+    } else {
+      y += 2;
+    }
+
+    y += 2;
+  });
+
+  doc.save("laporan_penggunaan_lab.pdf");
+};
+
+// load data awal ketika halaman dibuka
+loadDataFromServer();
+</script>
+
+</body>
+</html>
