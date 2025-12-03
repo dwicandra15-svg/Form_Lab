@@ -110,7 +110,7 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
     </div>
 
     <p id="headerSubtitleText">
-      Monitoring kegiatan Lab IPA dan Lab Komputer dengan bukti foto dan laporan PDF.
+      SMP NEGERI 6 SAMPANG
     </p>
 
     <div class="watermark-main">
@@ -278,11 +278,34 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzsgW-Wwx98PSTA9AE17mgH
 
 let currentLab = "ipa";
 let currentPhotoDataUrl = null;
-let usageData = [];   // SELALU disinkron dari Spreadsheet
+let usageData = [];        // sumber data untuk tabel & PDF
+let nextId = 1;            // id lokal untuk hapus
 
 const $ = id => document.getElementById(id);
 
-// PILIH LAB
+// ==== FUNGSI LOCALSTORAGE ====
+function loadFromLocal() {
+  const raw = localStorage.getItem("labUsageData");
+  if (!raw) return;
+  try {
+    usageData = JSON.parse(raw) || [];
+    // cari id terbesar lalu +1
+    let maxId = 0;
+    usageData.forEach(r => {
+      if (r.id && Number(r.id) > maxId) maxId = Number(r.id);
+    });
+    nextId = maxId + 1;
+  } catch (e) {
+    console.error("Gagal baca localStorage", e);
+    usageData = [];
+  }
+}
+
+function saveToLocal() {
+  localStorage.setItem("labUsageData", JSON.stringify(usageData));
+}
+
+// ==== PILIH LAB ====
 document.querySelectorAll(".lab-card").forEach(card => {
   card.addEventListener("click", () => {
     document.querySelectorAll(".lab-card").forEach(c => c.classList.remove("active"));
@@ -295,7 +318,7 @@ document.querySelectorAll(".lab-card").forEach(card => {
   });
 });
 
-// MODAL
+// ==== MODAL ====
 const modal = $("menuModal");
 $("headerMenuBtn").onclick = () => {
   $("inputHeaderIcon").value = $("headerIcon").textContent;
@@ -306,7 +329,7 @@ $("headerMenuBtn").onclick = () => {
 $("closeMenuModal").onclick = () => modal.style.display = "none";
 modal.addEventListener("click", e => { if (e.target === modal) modal.style.display = "none"; });
 
-// HEADER
+// ==== HEADER ====
 $("btnSimpanHeader").onclick = () => {
   const icon = $("inputHeaderIcon").value || "🏫";
   const title = $("inputHeaderTitle").value ||
@@ -331,7 +354,7 @@ $("inputHeaderLogo").onchange = e => {
   r.readAsDataURL(f);
 };
 
-// FOTO
+// ==== FOTO ====
 $("fotoBukti").onchange = e => {
   const f = e.target.files[0];
   if (!f) { currentPhotoDataUrl = null; return; }
@@ -340,7 +363,7 @@ $("fotoBukti").onchange = e => {
   r.readAsDataURL(f);
 };
 
-// SIMPAN DATA: kirim ke Spreadsheet, lalu refresh daftar
+// ==== SIMPAN DATA ====
 $("btnSimpan").onclick = async () => {
   const tanggal = $("tanggal").value;
   const namaPengguna = $("namaPengguna").value.trim();
@@ -356,49 +379,41 @@ $("btnSimpan").onclick = async () => {
   }
 
   const record = {
-    lab: currentLab, tanggal, namaPengguna, kelas, kegiatan,
-    jamMulai, jamSelesai, catatan, fotoDataUrl: currentPhotoDataUrl
+    id: nextId++,
+    lab: currentLab,
+    tanggal,
+    namaPengguna,
+    kelas,
+    kegiatan,
+    jamMulai,
+    jamSelesai,
+    catatan,
+    fotoDataUrl: currentPhotoDataUrl
   };
 
+  // 1) simpan ke localStorage (untuk tampilan & agar tidak hilang saat refresh)
+  usageData.push(record);
+  saveToLocal();
+  renderTable();
+
+  // 2) kirim ke Spreadsheet (arsip pusat)
   try {
     await fetch(API_URL + "?action=add", {
       method: "POST",
       mode: "no-cors",
       body: JSON.stringify(record)
     });
-    alert("Data tersimpan ke Spreadsheet.");
-    $("usageForm").reset();
-    currentPhotoDataUrl = null;
-    $("fotoBukti").value = "";
-    setTimeout(loadDataFromServer, 800);
   } catch (err) {
-    console.error(err);
-    alert("Gagal mengirim ke Spreadsheet. Periksa koneksi internet.");
+    console.error("Gagal kirim ke Spreadsheet", err);
   }
+
+  alert("Data tersimpan (tampilan & Spreadsheet).");
+  $("usageForm").reset();
+  currentPhotoDataUrl = null;
+  $("fotoBukti").value = "";
 };
 
-// AMBIL SEMUA DATA DARI SPREADSHEET (JSONP)
-function loadDataFromServer() {
-  const old = document.getElementById("jsonpScript");
-  if (old) old.remove();
-
-  const s = document.createElement("script");
-  s.id = "jsonpScript";
-  s.src = API_URL + "?action=list&callback=handleListData&_=" + Date.now();
-  document.body.appendChild(s);
-}
-
-// dipanggil oleh JSONP dari Apps Script
-function handleListData(obj){
-  if (!obj || obj.status !== "success") {
-    console.error("Gagal ambil data", obj);
-    return;
-  }
-  usageData = obj.data || [];
-  renderTable();
-}
-
-// TAMPILKAN DATA DI TABEL
+// ==== RENDER TABEL ====
 function renderTable() {
   const filterLab = $("filterLab").value;
   const tMulai = $("filterTanggalMulai").value;
@@ -447,22 +462,21 @@ function renderTable() {
 }
 $("btnTerapkanFilter").onclick = renderTable;
 
-// HAPUS DATA (tabel & Spreadsheet)
-function hapusData(id){
-  if(!confirm("Yakin ingin menghapus data ini?")) return;
-
+// ==== HAPUS DATA ====
+function hapusData(id) {
+  if (!confirm("Yakin ingin menghapus data ini?")) return;
   usageData = usageData.filter(x => String(x.id) !== String(id));
+  saveToLocal();
   renderTable();
 
+  // opsional: kirim juga perintah hapus ke Spreadsheet (tidak dibaca responnya)
   fetch(API_URL + "?action=delete&id=" + encodeURIComponent(id), {
     method: "POST",
     mode: "no-cors"
-  }).catch(err => console.error(err));
-
-  setTimeout(loadDataFromServer, 800);
+  }).catch(err => console.error("Gagal hapus di Spreadsheet", err));
 }
 
-// PDF dari data yang sudah sinkron
+// ==== PDF DARI usageData (localStorage) ====
 $("btnGeneratePDF").onclick = () => {
   if (!usageData.length) { alert("Belum ada data untuk dicetak."); return; }
 
@@ -527,9 +541,12 @@ $("btnGeneratePDF").onclick = () => {
   doc.save("laporan_penggunaan_lab.pdf");
 };
 
-// PERTAMA KALI HALAMAN DIBUKA: ambil data dari Spreadsheet
-window.addEventListener("load", loadDataFromServer);
+// ==== SAAT HALAMAN PERTAMA KALI DIBUKA ====
+window.addEventListener("load", () => {
+  loadFromLocal();   // ambil data lokal
+  renderTable();     // tampilkan di Data Penggunaan Lab
+});
 </script>
 
 </body>
-                                </html>
+          </html>
