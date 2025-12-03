@@ -110,11 +110,11 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
     </div>
 
     <p id="headerSubtitleText">
-      SMP NEGERI 6 SAMPANG
+      Monitoring kegiatan Lab IPA dan Lab Komputer dengan bukti foto dan laporan PDF.
     </p>
 
     <div class="watermark-main">
-      Created &amp; Developed by: <b>D.D Candra</b>
+      created &amp; developed by: <b>D.D Candra</b>
     </div>
   </div>
 </header>
@@ -278,8 +278,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzsgW-Wwx98PSTA9AE17mgH
 
 let currentLab = "ipa";
 let currentPhotoDataUrl = null;
-let usageData = [];   // hanya untuk sesi ini
-let nextId = 1;
+let usageData = [];   // SELALU disinkron dari Spreadsheet
 
 const $ = id => document.getElementById(id);
 
@@ -341,7 +340,7 @@ $("fotoBukti").onchange = e => {
   r.readAsDataURL(f);
 };
 
-// SIMPAN DATA
+// SIMPAN DATA: kirim ke Spreadsheet, lalu refresh daftar
 $("btnSimpan").onclick = async () => {
   const tanggal = $("tanggal").value;
   const namaPengguna = $("namaPengguna").value.trim();
@@ -357,40 +356,49 @@ $("btnSimpan").onclick = async () => {
   }
 
   const record = {
-    id: nextId++,
-    lab: currentLab,
-    tanggal,
-    namaPengguna,
-    kelas,
-    kegiatan,
-    jamMulai,
-    jamSelesai,
-    catatan,
-    fotoDataUrl: currentPhotoDataUrl
+    lab: currentLab, tanggal, namaPengguna, kelas, kegiatan,
+    jamMulai, jamSelesai, catatan, fotoDataUrl: currentPhotoDataUrl
   };
 
-  // 1) Tambah ke tabel sesi ini
-  usageData.push(record);
-  renderTable();
-
-  // 2) Kirim ke Spreadsheet (tanpa baca balikan)
   try {
     await fetch(API_URL + "?action=add", {
       method: "POST",
       mode: "no-cors",
       body: JSON.stringify(record)
     });
+    alert("Data tersimpan ke Spreadsheet.");
+    $("usageForm").reset();
+    currentPhotoDataUrl = null;
+    $("fotoBukti").value = "";
+    setTimeout(loadDataFromServer, 800);
   } catch (err) {
     console.error(err);
+    alert("Gagal mengirim ke Spreadsheet. Periksa koneksi internet.");
   }
-
-  alert("Data tersimpan (tabel & Spreadsheet).");
-  $("usageForm").reset();
-  currentPhotoDataUrl = null;
-  $("fotoBukti").value = "";
 };
 
-// RENDER TABEL dari usageData (sesi ini)
+// AMBIL SEMUA DATA DARI SPREADSHEET (JSONP)
+function loadDataFromServer() {
+  const old = document.getElementById("jsonpScript");
+  if (old) old.remove();
+
+  const s = document.createElement("script");
+  s.id = "jsonpScript";
+  s.src = API_URL + "?action=list&callback=handleListData&_=" + Date.now();
+  document.body.appendChild(s);
+}
+
+// dipanggil oleh JSONP dari Apps Script
+function handleListData(obj){
+  if (!obj || obj.status !== "success") {
+    console.error("Gagal ambil data", obj);
+    return;
+  }
+  usageData = obj.data || [];
+  renderTable();
+}
+
+// TAMPILKAN DATA DI TABEL
 function renderTable() {
   const filterLab = $("filterLab").value;
   const tMulai = $("filterTanggalMulai").value;
@@ -439,16 +447,24 @@ function renderTable() {
 }
 $("btnTerapkanFilter").onclick = renderTable;
 
-// HAPUS DATA di tabel sesi ini
+// HAPUS DATA (tabel & Spreadsheet)
 function hapusData(id){
-  if(!confirm("Yakin ingin menghapus data ini dari daftar?")) return;
-  usageData = usageData.filter(x => x.id !== id);
+  if(!confirm("Yakin ingin menghapus data ini?")) return;
+
+  usageData = usageData.filter(x => String(x.id) !== String(id));
   renderTable();
+
+  fetch(API_URL + "?action=delete&id=" + encodeURIComponent(id), {
+    method: "POST",
+    mode: "no-cors"
+  }).catch(err => console.error(err));
+
+  setTimeout(loadDataFromServer, 800);
 }
 
-// PDF dari usageData sesi ini
+// PDF dari data yang sudah sinkron
 $("btnGeneratePDF").onclick = () => {
-  if (!usageData.length) { alert("Belum ada data untuk dicetak pada sesi ini."); return; }
+  if (!usageData.length) { alert("Belum ada data untuk dicetak."); return; }
 
   const filterLab = $("reportLab").value;
   const tMulai = $("reportTanggalMulai").value;
@@ -460,7 +476,7 @@ $("btnGeneratePDF").onclick = () => {
   if (tSelesai) data = data.filter(x => x.tanggal <= tSelesai);
 
   if (!data.length) {
-    alert("Tidak ada data sesuai filter laporan pada sesi ini.");
+    alert("Tidak ada data sesuai filter laporan.");
     return;
   }
 
@@ -510,7 +526,10 @@ $("btnGeneratePDF").onclick = () => {
 
   doc.save("laporan_penggunaan_lab.pdf");
 };
+
+// PERTAMA KALI HALAMAN DIBUKA: ambil data dari Spreadsheet
+window.addEventListener("load", loadDataFromServer);
 </script>
 
 </body>
-        </html>
+                                </html>
