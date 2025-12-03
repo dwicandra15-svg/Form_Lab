@@ -5,7 +5,6 @@
 <title>Aplikasi Penggunaan Laboratorium Sekolah</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- jsPDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
@@ -32,7 +31,6 @@ header{
 }
 .watermark-main{text-align:center;font-size:.75rem;margin-top:6px;opacity:.85;}
 
-/* MODAL */
 .modal-backdrop{
   position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;align-items:center;
   justify-content:center;z-index:999;padding:8px;
@@ -85,6 +83,17 @@ th,td{border-bottom:1px solid #e1e5f0;padding:6px 8px;}
 
 .no-data{text-align:center;font-size:.83rem;opacity:.7;padding:8px;}
 footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
+
+.btn-delete{
+  border:none;
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:.78rem;
+  cursor:pointer;
+  background:#e53935;
+  color:#fff;
+}
+.btn-delete:hover{opacity:.85;}
 </style>
 </head>
 
@@ -170,7 +179,7 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
           <thead>
             <tr>
               <th>No</th><th>Lab</th><th>Tanggal</th><th>Guru</th><th>Kelas</th>
-              <th>Kegiatan</th><th>Waktu</th><th>Catatan</th><th>Foto</th>
+              <th>Kegiatan</th><th>Waktu</th><th>Catatan</th><th>Foto</th><th>Aksi</th>
             </tr>
           </thead>
           <tbody id="usageTableBody"></tbody>
@@ -264,23 +273,22 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
 </main>
 
 <script>
-// ====== URL WEB APP SPREADSHEET BAPAK ======
+// URL Web App (Spreadsheet)
 const API_URL = "https://script.google.com/macros/s/AKfycbzsgW-Wwx98PSTA9AE17mgHd7CjOat_Vicxvu1aCyBeBlseT6RUgZvB-TznCG08csw7/exec";
 
 let currentLab = "ipa";
 let currentPhotoDataUrl = null;
-let usageData = [];
+let usageData = [];   // hanya untuk sesi ini
+let nextId = 1;
 
-// helper get element
 const $ = id => document.getElementById(id);
 
-// ====== PILIH LAB ======
+// PILIH LAB
 document.querySelectorAll(".lab-card").forEach(card => {
   card.addEventListener("click", () => {
     document.querySelectorAll(".lab-card").forEach(c => c.classList.remove("active"));
     card.classList.add("active");
     currentLab = card.dataset.lab;
-
     $("currentLabBadge").textContent =
       currentLab === "ipa" ? "Lab IPA (aktif)" : "Lab Komputer (aktif)";
     $("formLabActive").textContent =
@@ -288,7 +296,7 @@ document.querySelectorAll(".lab-card").forEach(card => {
   });
 });
 
-// ====== MODAL TITIK 3 ======
+// MODAL
 const modal = $("menuModal");
 $("headerMenuBtn").onclick = () => {
   $("inputHeaderIcon").value = $("headerIcon").textContent;
@@ -299,20 +307,18 @@ $("headerMenuBtn").onclick = () => {
 $("closeMenuModal").onclick = () => modal.style.display = "none";
 modal.addEventListener("click", e => { if (e.target === modal) modal.style.display = "none"; });
 
-// ====== PENGATURAN HEADER ======
+// HEADER
 $("btnSimpanHeader").onclick = () => {
   const icon = $("inputHeaderIcon").value || "🏫";
   const title = $("inputHeaderTitle").value ||
     "Manajemen Penggunaan Laboratorium Sekolah";
   const subtitle = $("inputHeaderSubtitle").value ||
     "Monitoring kegiatan Lab IPA dan Lab Komputer dengan bukti foto dan laporan PDF.";
-
   $("headerIcon").textContent = icon;
   $("headerTitleText").textContent = title;
   $("headerSubtitleText").textContent = subtitle;
   alert("Header diperbarui!");
 };
-
 $("inputHeaderLogo").onchange = e => {
   const f = e.target.files[0];
   if (!f) return;
@@ -326,7 +332,7 @@ $("inputHeaderLogo").onchange = e => {
   r.readAsDataURL(f);
 };
 
-// ====== FOTO BUKTI ======
+// FOTO
 $("fotoBukti").onchange = e => {
   const f = e.target.files[0];
   if (!f) { currentPhotoDataUrl = null; return; }
@@ -335,7 +341,7 @@ $("fotoBukti").onchange = e => {
   r.readAsDataURL(f);
 };
 
-// ====== SIMPAN DATA KE SPREADSHEET ======
+// SIMPAN DATA
 $("btnSimpan").onclick = async () => {
   const tanggal = $("tanggal").value;
   const namaPengguna = $("namaPengguna").value.trim();
@@ -351,6 +357,7 @@ $("btnSimpan").onclick = async () => {
   }
 
   const record = {
+    id: nextId++,
     lab: currentLab,
     tanggal,
     namaPengguna,
@@ -362,51 +369,35 @@ $("btnSimpan").onclick = async () => {
     fotoDataUrl: currentPhotoDataUrl
   };
 
+  // 1) Tambah ke tabel sesi ini
+  usageData.push(record);
+  renderTable();
+
+  // 2) Kirim ke Spreadsheet (tanpa baca balikan)
   try {
-    const res = await fetch(API_URL + "?action=add", {
+    await fetch(API_URL + "?action=add", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      mode: "no-cors",
       body: JSON.stringify(record)
     });
-    const json = await res.json();
-    if (json.status === "success") {
-      alert("Data tersimpan ke Spreadsheet (ID: " + json.id + ")");
-      $("usageForm").reset();
-      currentPhotoDataUrl = null;
-      $("fotoBukti").value = "";
-      await loadDataFromServer();
-    } else {
-      alert("Gagal menyimpan: " + (json.message || "Unknown error"));
-    }
   } catch (err) {
     console.error(err);
-    alert("Error koneksi ke server (Spreadsheet).");
   }
+
+  alert("Data tersimpan (tabel & Spreadsheet).");
+  $("usageForm").reset();
+  currentPhotoDataUrl = null;
+  $("fotoBukti").value = "";
 };
 
-// ====== LOAD DATA DARI SPREADSHEET ======
-async function loadDataFromServer() {
-  try {
-    const res = await fetch(API_URL + "?action=list");
-    const json = await res.json();
-    if (json.status === "success") {
-      usageData = json.data || [];
-      renderTable();
-    } else {
-      console.error(json);
-    }
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-// ====== RENDER TABEL & FILTER ======
+// RENDER TABEL dari usageData (sesi ini)
 function renderTable() {
   const filterLab = $("filterLab").value;
   const tMulai = $("filterTanggalMulai").value;
   const tSelesai = $("filterTanggalSelesai").value;
 
   let data = [...usageData];
+
   if (filterLab !== "all") data = data.filter(x => x.lab === filterLab);
   if (tMulai) data = data.filter(x => x.tanggal >= tMulai);
   if (tSelesai) data = data.filter(x => x.tanggal <= tSelesai);
@@ -441,19 +432,23 @@ function renderTable() {
       <td>${waktu}</td>
       <td>${x.catatan || "-"}</td>
       <td>${fotoHTML}</td>
+      <td><button type="button" class="btn-delete" onclick="hapusData(${x.id})">Hapus</button></td>
     `;
     tb.appendChild(tr);
   });
 }
-
 $("btnTerapkanFilter").onclick = renderTable;
 
-// ====== GENERATE PDF ======
+// HAPUS DATA di tabel sesi ini
+function hapusData(id){
+  if(!confirm("Yakin ingin menghapus data ini dari daftar?")) return;
+  usageData = usageData.filter(x => x.id !== id);
+  renderTable();
+}
+
+// PDF dari usageData sesi ini
 $("btnGeneratePDF").onclick = () => {
-  if (!usageData.length) {
-    alert("Belum ada data untuk dicetak.");
-    return;
-  }
+  if (!usageData.length) { alert("Belum ada data untuk dicetak pada sesi ini."); return; }
 
   const filterLab = $("reportLab").value;
   const tMulai = $("reportTanggalMulai").value;
@@ -465,7 +460,7 @@ $("btnGeneratePDF").onclick = () => {
   if (tSelesai) data = data.filter(x => x.tanggal <= tSelesai);
 
   if (!data.length) {
-    alert("Tidak ada data sesuai filter laporan.");
+    alert("Tidak ada data sesuai filter laporan pada sesi ini.");
     return;
   }
 
@@ -515,10 +510,7 @@ $("btnGeneratePDF").onclick = () => {
 
   doc.save("laporan_penggunaan_lab.pdf");
 };
-
-// load data awal ketika halaman dibuka
-loadDataFromServer();
 </script>
 
 </body>
-</html>
+        </html>
