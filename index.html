@@ -5,6 +5,9 @@
 <title>Aplikasi Penggunaan Laboratorium Sekolah</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<!-- Supabase Client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- jsPDF untuk PDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
@@ -73,6 +76,7 @@ textarea{min-height:60px;resize:vertical;}
 .btn-row{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;}
 .btn-primary{background:#1976d2;color:#fff;border:none;border-radius:999px;padding:7px 16px;}
 .btn-outline{background:#fff;color:#1976d2;border-radius:999px;border:1px solid #1976d2;padding:7px 16px;}
+.btn-secondary{background:#ff9800;color:#fff;border:none;border-radius:999px;padding:7px 16px;}
 
 .filters-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;font-size:.82rem;}
 .filter-item{display:flex;flex-direction:column;gap:3px;}
@@ -94,13 +98,75 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
   color:#fff;
 }
 .btn-delete:hover{opacity:.85;}
+
+/* Login styles */
+.login-overlay{
+  position:fixed;inset:0;background:rgba(25,118,210,0.95);
+  display:flex;align-items:center;justify-content:center;z-index:1000;
+}
+.login-box{
+  background:#fff;padding:24px;border-radius:12px;max-width:360px;width:90%;
+  box-shadow:0 4px 20px rgba(0,0,0,0.2);
+}
+.login-box h2{margin-top:0;color:#1976d2;text-align:center;}
+.login-box input{margin-bottom:12px;}
+.login-box .btn-primary{width:100%;margin-top:8px;}
+.login-box .btn-outline{width:100%;margin-top:8px;}
+.login-box .note{font-size:.75rem;color:#666;text-align:center;margin-top:12px;}
+
+.sync-status{
+  position:fixed;bottom:10px;right:10px;background:#4caf50;color:#fff;
+  padding:6px 12px;border-radius:20px;font-size:.75rem;display:none;
+  z-index:100;
+}
+.sync-status.syncing{background:#ff9800;}
+.sync-status.error{background:#f44336;}
+
+.user-info{
+  position:absolute;left:8px;top:8px;font-size:.75rem;
+  background:rgba(255,255,255,0.2);padding:4px 8px;border-radius:12px;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.toast-notification {
+  position:fixed;top:20px;right:20px;background:#1976d2;color:#fff;
+  padding:12px 16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);
+  z-index:1001;font-size:.85rem;animation:slideIn 0.3s ease;max-width:300px;
+}
 </style>
 </head>
 
 <body>
 
+<!-- Login Overlay -->
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-box">
+    <h2>🔐 Login Guru</h2>
+    <label>Email Sekolah</label>
+    <input type="email" id="loginEmail" placeholder="guru@sekolah.sch.id" required>
+    <label>Password</label>
+    <input type="password" id="loginPassword" placeholder="••••••••" required>
+    <button id="btnLogin" class="btn-primary">Masuk</button>
+    <button id="btnRegister" class="btn-outline">Daftar Akun Baru</button>
+    <div class="note">
+      Data akan tersinkron otomatis dengan semua guru yang login.<br>
+      <small>Powered by Supabase</small>
+    </div>
+  </div>
+</div>
+
+<!-- Sync Status Indicator -->
+<div id="syncStatus" class="sync-status">🔄 Sinkronisasi...</div>
+
 <header>
   <div class="header-inner">
+    <div class="user-info" id="userInfo" style="display:none;">
+      👤 <span id="userName">-</span>
+    </div>
     <button id="headerMenuBtn" class="header-menu-btn">⋮</button>
 
     <div class="header-title-container">
@@ -114,7 +180,7 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
     </p>
 
     <div class="watermark-main">
-      Created &amp; Developed by: <b>D.D Candra</b>
+      Created & Developed by: <b>D.D Candra</b>
     </div>
   </div>
 </header>
@@ -123,7 +189,7 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
 <div id="menuModal" class="modal-backdrop">
   <div class="modal-box">
     <div class="modal-header">
-      <span>Pengaturan Header &amp; Laporan</span>
+      <span>Pengaturan Header & Laporan</span>
       <button id="closeMenuModal" class="modal-close-btn">✕</button>
     </div>
 
@@ -143,6 +209,7 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
 
     <div class="btn-row">
       <button id="btnSimpanHeader" class="btn-primary">Simpan Header</button>
+      <button id="btnLogout" class="btn-secondary">Logout</button>
     </div>
 
     <section class="card">
@@ -234,7 +301,7 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
         </div>
         <div class="lab-card komputer" data-lab="komputer">
           <div class="icon-circle">💻</div>
-          <div><b>Lab Komputer</b><br><small>CBT &amp; TIK</small></div>
+          <div><b>Lab Komputer</b><br><small>CBT & TIK</small></div>
         </div>
       </div>
     </section>
@@ -259,53 +326,335 @@ footer{text-align:center;font-size:.76rem;color:#555;margin-top:14px;}
         </div>
 
         <div class="btn-row">
-          <button id="btnSimpan" type="button" class="btn-primary">Simpan</button>
+          <button id="btnSimpan" type="button" class="btn-primary">💾 Simpan ke Cloud</button>
           <button type="reset" class="btn-outline">Reset</button>
         </div>
       </form>
     </section>
 
     <footer>
-      Aplikasi pemantauan penggunaan Lab IPA &amp; Lab Komputer.
+      Aplikasi pemantauan penggunaan Lab IPA & Lab Komputer - Multi User Sync.
     </footer>
 
   </div>
 </main>
 
 <script>
-// URL Web App (Spreadsheet)
-const API_URL = "https://script.google.com/macros/s/AKfycbzsgW-Wwx98PSTA9AE17mgHd7CjOat_Vicxvu1aCyBeBlseT6RUgZvB-TznCG08csw7/exec";
+// ==========================================
+// KONFIGURASI SUPABASE - SUDAH DIISI
+// ==========================================
+const SUPABASE_URL = 'https://nlztavnxqyczifttiqhl.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5senRhdm54cXljemlmdHRpcWhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MzI4MzAsImV4cCI6MjA4NjIwODgzMH0.4P5YOZy8L5tnrwr4kg0142Xua0AimCkdixMoxxTdkzY';
 
+// Inisialisasi Supabase
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
 let currentLab = "ipa";
 let currentPhotoDataUrl = null;
-let usageData = [];        // sumber data untuk tabel & PDF
-let nextId = 1;            // id lokal untuk hapus
+let usageData = [];
+let realtimeChannel = null;
 
 const $ = id => document.getElementById(id);
 
-// ==== FUNGSI LOCALSTORAGE ====
-function loadFromLocal() {
-  const raw = localStorage.getItem("labUsageData");
-  if (!raw) return;
+// ==========================================
+// AUTHENTICATION (LOGIN/REGISTER)
+// ==========================================
+
+// Cek session saat load
+async function checkSession() {
   try {
-    usageData = JSON.parse(raw) || [];
-    // cari id terbesar lalu +1
-    let maxId = 0;
-    usageData.forEach(r => {
-      if (r.id && Number(r.id) > maxId) maxId = Number(r.id);
-    });
-    nextId = maxId + 1;
-  } catch (e) {
-    console.error("Gagal baca localStorage", e);
-    usageData = [];
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+      currentUser = session.user;
+      showMainApp();
+      await loadDataFromSupabase();
+      setupRealtimeSubscription();
+    }
+  } catch (error) {
+    console.error("Error checking session:", error);
   }
 }
 
-function saveToLocal() {
-  localStorage.setItem("labUsageData", JSON.stringify(usageData));
+$("btnLogin").onclick = async () => {
+  const email = $("loginEmail").value;
+  const password = $("loginPassword").value;
+  
+  if (!email || !password) {
+    alert("Email dan password wajib diisi!");
+    return;
+  }
+
+  showSyncStatus("loading");
+  
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
+
+    if (error) {
+      hideSyncStatus();
+      alert("Login gagal: " + error.message);
+      return;
+    }
+
+    currentUser = data.user;
+    showMainApp();
+    await loadDataFromSupabase();
+    setupRealtimeSubscription();
+    hideSyncStatus();
+  } catch (err) {
+    hideSyncStatus();
+    alert("Terjadi kesalahan: " + err.message);
+  }
+};
+
+$("btnRegister").onclick = async () => {
+  const email = $("loginEmail").value;
+  const password = $("loginPassword").value;
+  
+  if (!email || !password) {
+    alert("Email dan password wajib diisi!");
+    return;
+  }
+
+  if (password.length < 6) {
+    alert("Password minimal 6 karakter!");
+    return;
+  }
+
+  showSyncStatus("loading");
+  
+  try {
+    const { data, error } = await supabaseClient.auth.signUp({
+      email: email,
+      password: password
+    });
+
+    if (error) {
+      hideSyncStatus();
+      alert("Pendaftaran gagal: " + error.message);
+      return;
+    }
+
+    hideSyncStatus();
+    
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      alert("Email sudah terdaftar! Silakan login.");
+    } else {
+      alert("Pendaftaran berhasil! Silakan cek email untuk verifikasi (jika diaktifkan), lalu login.");
+    }
+  } catch (err) {
+    hideSyncStatus();
+    alert("Terjadi kesalahan: " + err.message);
+  }
+};
+
+$("btnLogout").onclick = async () => {
+  if (!confirm("Yakin ingin logout?")) return;
+  
+  try {
+    await supabaseClient.auth.signOut();
+    currentUser = null;
+    
+    // Unsubscribe realtime
+    if (realtimeChannel) {
+      supabaseClient.removeChannel(realtimeChannel);
+    }
+    
+    $("loginOverlay").style.display = "flex";
+    $("userInfo").style.display = "none";
+    usageData = [];
+    renderTable();
+    
+    // Reset form login
+    $("loginEmail").value = "";
+    $("loginPassword").value = "";
+  } catch (error) {
+    console.error("Error logout:", error);
+  }
+};
+
+function showMainApp() {
+  $("loginOverlay").style.display = "none";
+  $("userInfo").style.display = "block";
+  $("userName").textContent = currentUser.email;
+  
+  // Set default nama pengguna dari email
+  const defaultName = currentUser.email.split('@')[0].replace(/[._]/g, ' ');
+  $("namaPengguna").value = defaultName.charAt(0).toUpperCase() + defaultName.slice(1);
 }
 
-// ==== PILIH LAB ====
+// ==========================================
+// SUPABASE DATABASE OPERATIONS
+// ==========================================
+
+async function loadDataFromSupabase() {
+  showSyncStatus("loading");
+  
+  try {
+    const { data, error } = await supabaseClient
+      .from('lab_usage')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error loading data:", error);
+      showSyncStatus("error");
+      setTimeout(hideSyncStatus, 3000);
+      return;
+    }
+
+    usageData = data || [];
+    renderTable();
+    hideSyncStatus();
+  } catch (err) {
+    console.error("Error:", err);
+    showSyncStatus("error");
+  }
+}
+
+async function saveToSupabase(record) {
+  showSyncStatus("loading");
+  
+  // Tambah user_id untuk tracking siapa yang input
+  const recordWithUser = {
+    ...record,
+    user_id: currentUser.id,
+    user_email: currentUser.email
+  };
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('lab_usage')
+      .insert([recordWithUser])
+      .select();
+
+    if (error) {
+      console.error("Error saving:", error);
+      showSyncStatus("error");
+      alert("Gagal menyimpan ke cloud: " + error.message);
+      return null;
+    }
+
+    showSyncStatus("success");
+    setTimeout(hideSyncStatus, 2000);
+    return data[0];
+  } catch (err) {
+    console.error("Error:", err);
+    showSyncStatus("error");
+    return null;
+  }
+}
+
+async function deleteFromSupabase(id) {
+  showSyncStatus("loading");
+  
+  try {
+    const { error } = await supabaseClient
+      .from('lab_usage')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error deleting:", error);
+      showSyncStatus("error");
+      alert("Gagal menghapus: " + error.message);
+      return false;
+    }
+
+    showSyncStatus("success");
+    setTimeout(hideSyncStatus, 2000);
+    return true;
+  } catch (err) {
+    console.error("Error:", err);
+    showSyncStatus("error");
+    return false;
+  }
+}
+
+// ==========================================
+// REALTIME SUBSCRIPTION (LIVE SYNC)
+// ==========================================
+
+function setupRealtimeSubscription() {
+  // Unsubscribe existing
+  if (realtimeChannel) {
+    supabaseClient.removeChannel(realtimeChannel);
+  }
+
+  // Subscribe ke perubahan data
+  realtimeChannel = supabaseClient
+    .channel('lab_usage_changes')
+    .on('postgres_changes', 
+      { 
+        event: '*', 
+        schema: 'public', 
+        table: 'lab_usage' 
+      }, 
+      (payload) => {
+        console.log('Realtime update:', payload);
+        // Refresh data
+        loadDataFromSupabase();
+        
+        // Notifikasi jika data baru dari user lain
+        if (payload.eventType === 'INSERT' && payload.new.user_id !== currentUser.id) {
+          showNotification("🆕 Data baru ditambahkan oleh " + payload.new.user_email);
+        } else if (payload.eventType === 'DELETE' && payload.old.user_id !== currentUser.id) {
+          showNotification("🗑️ Data dihapus oleh guru lain");
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log("Realtime status:", status);
+    });
+}
+
+function showNotification(message) {
+  // Buat toast notification
+  const existing = document.querySelector('.toast-notification');
+  if (existing) existing.remove();
+  
+  const toast = document.createElement('div');
+  toast.className = 'toast-notification';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.remove();
+  }, 4000);
+}
+
+// ==========================================
+// UI STATUS INDICATOR
+// ==========================================
+
+function showSyncStatus(status) {
+  const el = $("syncStatus");
+  el.style.display = "block";
+  
+  if (status === "loading") {
+    el.textContent = "🔄 Sinkronisasi...";
+    el.className = "sync-status syncing";
+  } else if (status === "error") {
+    el.textContent = "❌ Gagal sync";
+    el.className = "sync-status error";
+  } else {
+    el.textContent = "✓ Tersinkron";
+    el.className = "sync-status";
+  }
+}
+
+function hideSyncStatus() {
+  setTimeout(() => {
+    $("syncStatus").style.display = "none";
+  }, 2000);
+}
+
+// ==========================================
+// PILIH LAB
+// ==========================================
 document.querySelectorAll(".lab-card").forEach(card => {
   card.addEventListener("click", () => {
     document.querySelectorAll(".lab-card").forEach(c => c.classList.remove("active"));
@@ -318,7 +667,9 @@ document.querySelectorAll(".lab-card").forEach(card => {
   });
 });
 
-// ==== MODAL ====
+// ==========================================
+// MODAL
+// ==========================================
 const modal = $("menuModal");
 $("headerMenuBtn").onclick = () => {
   $("inputHeaderIcon").value = $("headerIcon").textContent;
@@ -329,7 +680,9 @@ $("headerMenuBtn").onclick = () => {
 $("closeMenuModal").onclick = () => modal.style.display = "none";
 modal.addEventListener("click", e => { if (e.target === modal) modal.style.display = "none"; });
 
-// ==== HEADER ====
+// ==========================================
+// HEADER SETTINGS
+// ==========================================
 $("btnSimpanHeader").onclick = () => {
   const icon = $("inputHeaderIcon").value || "🏫";
   const title = $("inputHeaderTitle").value ||
@@ -354,17 +707,58 @@ $("inputHeaderLogo").onchange = e => {
   r.readAsDataURL(f);
 };
 
-// ==== FOTO ====
+// ==========================================
+// FOTO HANDLING
+// ==========================================
 $("fotoBukti").onchange = e => {
   const f = e.target.files[0];
   if (!f) { currentPhotoDataUrl = null; return; }
+  
+  // Resize/compress image sebelum upload
   const r = new FileReader();
-  r.onload = v => currentPhotoDataUrl = v.target.result;
+  r.onload = v => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 800;
+      const MAX_HEIGHT = 600;
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Compress to JPEG with quality 0.7
+      currentPhotoDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+    };
+    img.src = v.target.result;
+  };
   r.readAsDataURL(f);
 };
 
-// ==== SIMPAN DATA ====
+// ==========================================
+// SIMPAN DATA (KE SUPABASE)
+// ==========================================
 $("btnSimpan").onclick = async () => {
+  if (!currentUser) {
+    alert("Silakan login terlebih dahulu!");
+    return;
+  }
+
   const tanggal = $("tanggal").value;
   const namaPengguna = $("namaPengguna").value.trim();
   const kelas = $("kelas").value.trim();
@@ -379,41 +773,38 @@ $("btnSimpan").onclick = async () => {
   }
 
   const record = {
-    id: nextId++,
     lab: currentLab,
     tanggal,
-    namaPengguna,
+    nama_pengguna: namaPengguna,
     kelas,
     kegiatan,
-    jamMulai,
-    jamSelesai,
+    jam_mulai: jamMulai,
+    jam_selesai: jamSelesai,
     catatan,
-    fotoDataUrl: currentPhotoDataUrl
+    foto_data_url: currentPhotoDataUrl
   };
 
-  // 1) simpan ke localStorage (untuk tampilan & agar tidak hilang saat refresh)
-  usageData.push(record);
-  saveToLocal();
-  renderTable();
-
-  // 2) kirim ke Spreadsheet (arsip pusat)
-  try {
-    await fetch(API_URL + "?action=add", {
-      method: "POST",
-      mode: "no-cors",
-      body: JSON.stringify(record)
-    });
-  } catch (err) {
-    console.error("Gagal kirim ke Spreadsheet", err);
+  // Simpan ke Supabase
+  const saved = await saveToSupabase(record);
+  
+  if (saved) {
+    alert("✅ Data berhasil disimpan ke cloud! Semua guru dapat melihat data ini.");
+    $("usageForm").reset();
+    currentPhotoDataUrl = null;
+    $("fotoBukti").value = "";
+    
+    // Reset nama default
+    const defaultName = currentUser.email.split('@')[0].replace(/[._]/g, ' ');
+    $("namaPengguna").value = defaultName.charAt(0).toUpperCase() + defaultName.slice(1);
+    
+    // Set tanggal ke hari ini
+    $("tanggal").valueAsDate = new Date();
   }
-
-  alert("Data tersimpan (tampilan & Spreadsheet).");
-  $("usageForm").reset();
-  currentPhotoDataUrl = null;
-  $("fotoBukti").value = "";
 };
 
-// ==== RENDER TABEL ====
+// ==========================================
+// RENDER TABEL
+// ==========================================
 function renderTable() {
   const filterLab = $("filterLab").value;
   const tMulai = $("filterTanggalMulai").value;
@@ -440,43 +831,50 @@ function renderTable() {
   tbl.style.display = "table";
 
   data.forEach((x, i) => {
-    const waktu = (x.jamMulai || "-") + " s.d. " + (x.jamSelesai || "-");
-    const fotoHTML = x.fotoDataUrl ?
-      `<img class="photo-thumb" src="${x.fotoDataUrl}">` : "-";
+    const waktu = (x.jam_mulai || "-") + " s.d. " + (x.jam_selesai || "-");
+    const fotoHTML = x.foto_data_url ?
+      `<img class="photo-thumb" src="${x.foto_data_url}" onclick="window.open('${x.foto_data_url}', '_blank')" style="cursor:pointer;">` : "-";
+    
+    // Tandai data milik sendiri
+    const isMine = x.user_id === currentUser?.id;
+    const ownerBadge = isMine ? '<span style="color:#1976d2;font-size:.7rem;">(Anda)</span>' : '';
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${i + 1}</td>
       <td>${x.lab === "ipa" ? "Lab IPA" : "Lab Komputer"}</td>
       <td>${x.tanggal}</td>
-      <td>${x.namaPengguna}</td>
+      <td>${x.nama_pengguna} ${ownerBadge}</td>
       <td>${x.kelas || "-"}</td>
       <td>${x.kegiatan}</td>
       <td>${waktu}</td>
       <td>${x.catatan || "-"}</td>
       <td>${fotoHTML}</td>
-      <td><button type="button" class="btn-delete" onclick="hapusData(${x.id})">Hapus</button></td>
+      <td>
+        ${isMine ? `<button type="button" class="btn-delete" onclick="hapusData('${x.id}')">Hapus</button>` : '<span style="color:#999;font-size:.7rem;">-</span>'}
+      </td>
     `;
     tb.appendChild(tr);
   });
 }
 $("btnTerapkanFilter").onclick = renderTable;
 
-// ==== HAPUS DATA ====
-function hapusData(id) {
+// ==========================================
+// HAPUS DATA
+// ==========================================
+async function hapusData(id) {
   if (!confirm("Yakin ingin menghapus data ini?")) return;
-  usageData = usageData.filter(x => String(x.id) !== String(id));
-  saveToLocal();
-  renderTable();
-
-  // opsional: kirim juga perintah hapus ke Spreadsheet (tidak dibaca responnya)
-  fetch(API_URL + "?action=delete&id=" + encodeURIComponent(id), {
-    method: "POST",
-    mode: "no-cors"
-  }).catch(err => console.error("Gagal hapus di Spreadsheet", err));
+  
+  const success = await deleteFromSupabase(id);
+  if (success) {
+    // Data akan otomatis refresh via realtime, tapi kita bisa manual juga
+    await loadDataFromSupabase();
+  }
 }
 
-// ==== PDF DARI usageData (localStorage) ====
+// ==========================================
+// GENERATE PDF
+// ==========================================
 $("btnGeneratePDF").onclick = () => {
   if (!usageData.length) { alert("Belum ada data untuk dicetak."); return; }
 
@@ -510,23 +908,24 @@ $("btnGeneratePDF").onclick = () => {
     if (y > 270) { doc.addPage(); y = 10; }
 
     const labLabel = x.lab === "ipa" ? "Lab IPA" : "Lab Komputer";
-    const waktu = (x.jamMulai || "-") + " s.d. " + (x.jamSelesai || "-");
+    const waktu = (x.jam_mulai || "-") + " s.d. " + (x.jam_selesai || "-");
 
     doc.setFontSize(10);
     doc.text(`${i + 1}. ${labLabel}`, 10, y); y += 5;
     doc.setFontSize(8);
     doc.text(`Tanggal : ${x.tanggal}`, 12, y); y += 4;
-    doc.text(`Pengguna: ${x.namaPengguna}`, 12, y); y += 4;
+    doc.text(`Pengguna: ${x.nama_pengguna}`, 12, y); y += 4;
     doc.text(`Kelas   : ${x.kelas || "-"}`, 12, y); y += 4;
     doc.text(`Kegiatan: ${x.kegiatan}`, 12, y); y += 4;
     doc.text(`Waktu   : ${waktu}`, 12, y); y += 4;
     doc.text(`Catatan : ${x.catatan || "-"}`, 12, y); y += 4;
+    doc.text(`Input by: ${x.user_email || "-"}`, 12, y); y += 4;
 
-    if (x.fotoDataUrl) {
+    if (x.foto_data_url) {
       if (y > 240) { doc.addPage(); y = 10; }
       try {
         doc.text("Bukti Foto:", 12, y); y += 4;
-        doc.addImage(x.fotoDataUrl, "JPEG", 12, y, 40, 30);
+        doc.addImage(x.foto_data_url, "JPEG", 12, y, 40, 30);
         y += 34;
       } catch (e) {
         doc.text("(Foto tidak dapat dimuat)", 12, y); y += 6;
@@ -541,12 +940,17 @@ $("btnGeneratePDF").onclick = () => {
   doc.save("laporan_penggunaan_lab.pdf");
 };
 
-// ==== SAAT HALAMAN PERTAMA KALI DIBUKA ====
+// ==========================================
+// INIT
+// ==========================================
 window.addEventListener("load", () => {
-  loadFromLocal();   // ambil data lokal
-  renderTable();     // tampilkan di Data Penggunaan Lab
+  // Set default tanggal hari ini
+  $("tanggal").valueAsDate = new Date();
+  
+  // Cek session
+  checkSession();
 });
 </script>
 
 </body>
-          </html>
+</html>
